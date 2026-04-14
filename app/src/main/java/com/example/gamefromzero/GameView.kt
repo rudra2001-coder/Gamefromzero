@@ -4,12 +4,14 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 
@@ -44,6 +46,14 @@ class GameView(private val context: Context) : SurfaceView(context), SurfaceHold
     private var explosionSoundId = 0
     private var isSoundLoaded = false
     
+    private var moveLeft = false
+    private var moveRight = false
+    
+    private val leftArrowRect = RectF()
+    private val rightArrowRect = RectF()
+    private val arrowSize = 150f
+    private val arrowMargin = 50f
+    
     private fun initSoundPool() {
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
@@ -63,7 +73,44 @@ class GameView(private val context: Context) : SurfaceView(context), SurfaceHold
     init {
         holder.addCallback(this)
         isFocusable = true
+        isFocusableInTouchMode = true
         initSoundPool()
+    }
+    
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        leftArrowRect.set(arrowMargin, h / 2f - arrowSize / 2, arrowMargin + arrowSize, h / 2f + arrowSize / 2)
+        rightArrowRect.set(w - arrowMargin - arrowSize, h / 2f - arrowSize / 2, w - arrowMargin, h / 2f + arrowSize / 2)
+    }
+    
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                if (leftArrowRect.contains(event.x, event.y)) {
+                    moveLeft = true
+                    return true
+                }
+                if (rightArrowRect.contains(event.x, event.y)) {
+                    moveRight = true
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                moveLeft = false
+                moveRight = false
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+    
+    private fun handleTouchInput() {
+        if (moveLeft && !moveRight) {
+            player.setVelocity(-1f)
+        } else if (moveRight && !moveLeft) {
+            player.setVelocity(1f)
+        } else if (!sensorController.hasAccelerometer()) {
+            player.setVelocity(0f)
+        }
     }
     
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -74,6 +121,9 @@ class GameView(private val context: Context) : SurfaceView(context), SurfaceHold
             screenWidth = 1080
             screenHeight = 1920
         }
+        
+        leftArrowRect.set(arrowMargin, screenHeight / 2f - arrowSize / 2, arrowMargin + arrowSize, screenHeight / 2f + arrowSize / 2)
+        rightArrowRect.set(screenWidth - arrowMargin - arrowSize, screenHeight / 2f - arrowSize / 2, screenWidth - arrowMargin, screenHeight / 2f + arrowSize / 2)
         
         initGame()
         isInitialized = true
@@ -141,7 +191,7 @@ class GameView(private val context: Context) : SurfaceView(context), SurfaceHold
     private fun update() {
         val currentTime = System.currentTimeMillis()
         
-        player.setVelocity(sensorController.getTiltX())
+        handleTouchInput()
         player.update(screenWidth, screenHeight)
         
         if (currentTime - lastShotTime >= shootInterval) {
@@ -161,6 +211,8 @@ class GameView(private val context: Context) : SurfaceView(context), SurfaceHold
         }
         
         for (enemy in enemies) {
+            enemy.update(enemy.currentSpeed)
+            
             if (bullet.hasHitEnemy(enemy.rect)) {
                 score += 10
                 bullet.reset()
@@ -241,6 +293,8 @@ class GameView(private val context: Context) : SurfaceView(context), SurfaceHold
             bullet.draw(canvas, paint)
             player.draw(canvas, paint)
             
+            drawArrows(canvas)
+            
             val scorePaint = Paint().apply {
                 color = Color.GREEN
                 textSize = 50f
@@ -293,6 +347,35 @@ class GameView(private val context: Context) : SurfaceView(context), SurfaceHold
                 }
             }
         }
+    }
+    
+    private fun drawArrows(canvas: Canvas) {
+        val arrowPaint = Paint().apply {
+            color = Color.argb(128, 100, 100, 100)
+            style = Paint.Style.FILL
+        }
+        
+        val strokePaint = Paint().apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 5f
+        }
+        
+        canvas.drawRoundRect(leftArrowRect, 20f, 20f, arrowPaint)
+        canvas.drawRoundRect(leftArrowRect, 20f, 20f, strokePaint)
+        canvas.drawText("<", leftArrowRect.centerX() - 15f, leftArrowRect.centerY() + 15f, Paint().apply {
+            color = Color.WHITE
+            textSize = 60f
+            textAlign = Paint.Align.CENTER
+        })
+        
+        canvas.drawRoundRect(rightArrowRect, 20f, 20f, arrowPaint)
+        canvas.drawRoundRect(rightArrowRect, 20f, 20f, strokePaint)
+        canvas.drawText(">", rightArrowRect.centerX() - 15f, rightArrowRect.centerY() + 15f, Paint().apply {
+            color = Color.WHITE
+            textSize = 60f
+            textAlign = Paint.Align.CENTER
+        })
     }
     
     fun restartGame() {

@@ -30,8 +30,10 @@ class MainActivity : AppCompatActivity() {
         val mainLayout = findViewById<View>(R.id.main)
         mainLayout.visibility = View.GONE
         
-        gameView = GameView(this)
-        setContentView(gameView)
+        val newGameView = GameView(this)
+        setContentView(newGameView)
+        newGameView.requestFocus()
+        gameView = newGameView
     }
     
     private fun showMenu() {
